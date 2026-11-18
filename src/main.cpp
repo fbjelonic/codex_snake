@@ -18,6 +18,10 @@
 #include <unistd.h>
 #include <termios.h>
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 namespace
 {
     struct Position
@@ -50,6 +54,17 @@ namespace
 
     std::filesystem::path executableDirectory()
     {
+#ifdef __APPLE__
+        uint32_t size = 0;
+        _NSGetExecutablePath(nullptr, &size);
+        std::vector<char> buffer(size);
+        if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+        {
+            throw std::runtime_error("Failed to resolve executable path.");
+        }
+
+        return std::filesystem::weakly_canonical(buffer.data()).parent_path();
+#else
         std::array<char, 4096> buffer {};
         const ssize_t length = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
         if (length == -1)
@@ -59,6 +74,7 @@ namespace
 
         buffer[static_cast<std::size_t>(length)] = '\0';
         return std::filesystem::path(buffer.data()).parent_path();
+#endif
     }
 
     std::string trim(const std::string& value)
